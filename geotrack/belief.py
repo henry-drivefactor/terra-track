@@ -11,8 +11,9 @@ prior. This is a Metropolis construction, so pi is the stationary distribution:
 searched-and-emptied ground refills from its surroundings, along roads and
 passable ground, back towards the prior. Viewed continuously this is a
 Fokker-Planck (advection-diffusion) equation with drift up the gradient of
-log(pi) - the same linear Gaussian-Markov structure as a spatio-temporal GP with a
-physics-derived kernel, solved on the grid.
+log(pi). The same linear operator would give the mean dynamics of a
+spatio-temporal GP with a physics-derived kernel; this filter propagates only the
+mean intensity (no covariance), so it is a grid Bayes filter, not a GP.
 
 The update step is exact for perfect sensing: inside a sensor footprint any
 target would have been seen, so the undiscovered intensity there drops to

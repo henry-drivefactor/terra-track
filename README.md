@@ -76,9 +76,11 @@ the expected count.
   - The prior is therefore the stationary distribution. Ground that has been
     searched and emptied refills from its surroundings, along roads and through
     passes, back towards the prior.
-  - In continuous form this is a Fokker–Planck equation with drift up `∇log π`: a
-    linear Gauss–Markov system equivalent to a spatio-temporal Gaussian process
-    with a physics-derived kernel, solved on the grid.
+  - In continuous form this is a Fokker–Planck (advection–diffusion) equation with
+    drift up `∇log π`. That linear operator is the same one that would define the
+    mean dynamics of a spatio-temporal Gaussian process with a physics-derived
+    kernel. The filter here propagates **only the mean intensity**, not a
+    covariance, so it is a Bayesian grid filter with GP-style dynamics, not a GP.
 - **Update:** exact negative information. Inside a footprint any target would have
   been seen, so the intensity there is multiplied by `(1 − pd)`. Discovered targets
   leave this map and become tracks.
