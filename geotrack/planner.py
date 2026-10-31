@@ -5,10 +5,13 @@ fixed-wing kinematics: a fan of two-segment constant-turn manoeuvres, pursuit
 routes to the highest-value regions of the belief, pursuit of each track's
 predicted position, and the remainder of the current route.
 
-Each candidate is scored by
+Each candidate is scored in nats of expected information gain:
 
-    w_search * expected undiscovered targets swept by the footprint (discounted by time)
-  + w_track  * sum over tracks of P(re-observe) x forecast entropy at that time
+    w_search * E[new detections] x H(where an undiscovered target is)
+  + w_track  * sum over tracks of P(re-observe) x H(track forecast at that time)
+
+Entropies are measured over footprint-sized bins, so "one nat" means the same
+thing for both terms; gains are discounted by time to reward getting there early.
 
 after first removing everything teammates' committed legs are already expected
 to observe. That conditioning is the coordination mechanism: no central
@@ -82,6 +85,22 @@ class InfoPlanner:
         self.n_part = int(p["plan_particles"])
         self.dy, self.dx = self.g.disc_offsets(self.R)
         self.seed = cfg["seed"]
+        self.bin = max(1, int(round(self.R / self.g.cell)))
+        self.bins_x = -(-self.g.nx // self.bin)
+
+    def _bins(self, cells):
+        iy, ix = np.divmod(cells, self.g.nx)
+        return (iy // self.bin) * self.bins_x + ix // self.bin
+
+    def _entropy(self, cells):
+        _, c = np.unique(self._bins(cells), return_counts=True)
+        p = c / c.sum()
+        return float(-(p * np.log(p)).sum())
+
+    def _intensity_entropy(self, lam):
+        w = np.bincount(self._bins(np.arange(self.g.N)), weights=lam)
+        p = w[w > 0] / w.sum()
+        return float(-(p * np.log(p)).sum())
 
     # ---------------------------------------------------------------- helpers
     def _disc_idx(self, pts):
@@ -117,7 +136,7 @@ class InfoPlanner:
         for tr in agent.tracks.tracks.values():
             F = agent.tracks.forecast(tr, n, self.stride, self.n_part, [self.seed, agent.id, tr.tid, step])
             cells = g.index(F[..., 0], F[..., 1])
-            Hk = np.array([_entropy(cells[:, j]) for j in range(cells.shape[1])])
+            Hk = np.array([self._entropy(cells[:, j]) for j in range(cells.shape[1])])
             covered = np.zeros(len(F), bool)
             for r in team:
                 m = min(len(ev), len(r) // self.stride)
@@ -151,12 +170,13 @@ class InfoPlanner:
             cands.append(rem[None])
         routes = np.concatenate(cands)
 
-        score = self._score(routes, lam, track_data, ev, hsteps)
+        h_u = self._intensity_entropy(lam) if lam.sum() > 1e-9 else 0.0
+        score = self._score(routes, lam, track_data, ev, hsteps, h_u)
         if prev is not None:
             score[prev] *= 1.03   # mild hysteresis: do not churn between near-equal plans
         return routes[int(np.argmax(score))]
 
-    def _score(self, routes, lam, track_data, ev, hsteps):
+    def _score(self, routes, lam, track_data, ev, hsteps, h_u):
         g = self.g
         C = len(routes)
         P = routes[:, ev, :2]
@@ -179,11 +199,11 @@ class InfoPlanner:
             track += np.where(anyhit, self.gamma ** hsteps[first] * Hk[first], 0.0).mean(1)
 
         outside = ~g.inside(routes[..., 0], routes[..., 1])
-        return self.w_search * search + self.w_track * track - 10.0 * outside.mean(1)
+        return self.w_search * h_u * search + self.w_track * track - 10.0 * outside.mean(1)
 
     def _value_goals(self, lam, track_data):
         g = self.g
-        V = self.w_search * lam.copy()
+        V = self.w_search * self._intensity_entropy(lam) * lam if lam.sum() > 1e-9 else lam.copy()
         for tr, F, Hk, covered in track_data:
             cells = g.index(F[:, -1, 0], F[:, -1, 1])
             np.add.at(V, cells, self.w_track * Hk[-1] * (~covered) / len(F))
@@ -235,8 +255,3 @@ class LawnmowerPlanner:
             out[s] = x, y, h
         return out
 
-
-def _entropy(cells):
-    _, c = np.unique(cells, return_counts=True)
-    p = c / c.sum()
-    return float(-(p * np.log(p)).sum())

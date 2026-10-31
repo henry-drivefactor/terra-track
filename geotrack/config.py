@@ -68,10 +68,11 @@ DEFAULTS: dict = {
     "planner": {
         "type": "coordinated",   # coordinated | greedy | lawnmower
         "replan": "event",       # open_loop | per_leg | event
-        "horizon_s": 480.0,
+        "horizon_s": 300.0,
         "leg_s": 60.0,
+        "commit_legs": 2,        # how much of a route teammates treat as committed (open_loop: all of it)
         "w_search": 1.0,
-        "w_track": 0.5,
+        "w_track": 1.0,
         "discount_per_min": 0.9,
         "n_goals": 6,
         "plan_particles": 96,

@@ -66,6 +66,9 @@ class Simulation:
         self.replan_mode = "open_loop" if p["type"] == "lawnmower" else p["replan"]
         self.leg = max(1, int(round(p["leg_s"] / self.dt)))
         self.min_event_gap = int(round(p["min_event_gap_s"] / self.dt))
+        if self.replan_mode != "open_loop":
+            for a in self.agents:
+                a.commit_steps = int(p["commit_legs"]) * self.leg
         self.losses = {int(round(e["t_s"] / self.dt)): e["agent"] for e in cfg["events"] if e["type"] == "agent_loss"}
 
         self.record_frames = record_frames and cfg["sim"]["frame_every"] > 0

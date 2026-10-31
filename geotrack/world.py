@@ -134,7 +134,8 @@ class World:
         # Rivers: least-elevation paths edge to edge.
         water = np.zeros(shape, bool)
         for i in range(w["n_rivers"]):
-            cost = np.exp(4.0 * _norm01(elev)) + 0.2 * rng.random(shape)
+            edge = np.minimum(np.minimum(xx, 1 - xx), np.minimum(yy, 1 - yy))
+            cost = np.exp(4.0 * _norm01(elev)) + 0.2 * rng.random(shape) + 6.0 * np.exp(-edge / 0.08)
             G = g.graph(cost)
             if i % 2 == 0:
                 a = (int(rng.integers(g.ny // 5, 4 * g.ny // 5)), 0)

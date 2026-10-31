@@ -1,0 +1,29 @@
+# S1 - Valley search.
+# Four agents search ridged terrain with a road network for nine vehicles
+# (mostly road-bound, a couple cross-country, one parked) and keep tracking
+# them once found. Baseline scenario for planner comparisons.
+name: s1_valley_search
+seed: 7
+sim:
+  duration_s: 2400
+world:
+  size_m: 10000
+  relief_m: 320
+  n_rivers: 1
+  n_towns: 7
+  n_exits: 3
+targets:
+  road: 6
+  offroad: 2
+  static: 1
+agents:
+  count: 4
+  base: [0.08, 0.08]
+comms:
+  range_m: 4000
+  loss: 0.1
+planner:
+  type: coordinated
+  replan: event
+  w_search: 1.0
+  w_track: 1.0

@@ -45,6 +45,7 @@ class Agent:
         self.resend_after = int(c["resend_after_steps"])
         self.max_bytes = int(c["max_bytes_per_packet"])
         self.last_event_replan = -10 ** 9
+        self.commit_steps: int | None = None   # None = whole route is committed
 
     # ------------------------------------------------------------ flight/sense
     def set_plan(self, route, step: int) -> None:
@@ -144,7 +145,8 @@ class Agent:
             if a == self.id or a in self.stale or "plan" not in tm:
                 continue
             _, ps, route = tm["plan"]
-            rem = route[step - ps:]
+            end = len(route) if self.commit_steps is None else self.commit_steps
+            rem = route[step - ps:end]
             if len(rem):
                 out.append(rem)
         return out
