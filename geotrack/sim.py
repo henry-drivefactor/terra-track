@@ -8,6 +8,7 @@ from pathlib import Path
 
 import numpy as np
 
+from . import audit
 from .agent import Agent
 from .belief import SearchModel
 from .comms import Network
@@ -78,6 +79,7 @@ class Simulation:
         self.found_step = np.full(n_t, -1)
         self.last_seen = np.full(n_t, -1)
         self.observed = np.zeros(g.N, bool)
+        self.true_occ = np.zeros(g.N)   # vehicle-steps per cell, for the bias audit
         self.replans = 0
         self.event_replans = 0
 
@@ -115,6 +117,8 @@ class Simulation:
                 self.log(step, f"A{a.id} LOST")
         self.targets.step(now - self.dt, self.dt)
         tpos, th, ts = self.targets.positions(), self.targets.headings(), self.targets.speeds()
+        np.add.at(self.true_occ, self.world.grid.index(tpos[:, 0], tpos[:, 1]), 1.0)
+        self.steps_run = step
         alive = [a for a in self.agents if a.alive]
         for a in alive:
             a.move()
@@ -222,6 +226,7 @@ class Simulation:
             k = int(np.ceil(f * n_t))
             return float(found_t[k - 1]) if 0 < k <= len(found_t) else float("nan")
         half = len(m["t"]) // 2
+        aud = audit.compute(self.audit_inputs(), self.world.grid.cell)
         return {
             "name": self.cfg["name"],
             "seed": self.cfg["seed"],
@@ -245,8 +250,21 @@ class Simulation:
             "packets_total": int(m["packets"][-1]),
             "replans_total": self.replans,
             "event_replans": self.event_replans,
+            "audit_tv_naive": aud["tv_naive"],
+            "audit_tv_corrected": aud["tv_corrected"],
+            "audit_tv_prior": aud["tv_prior"],
+            "audit_rho_detections_effort": aud["rho_detections_effort"],
             "runtime_s": round(getattr(self, "runtime", float("nan")), 2),
         }
+
+    def audit_inputs(self) -> dict:
+        """Effort and detections from the best-informed surviving agent, plus truth, for the bias audit."""
+        alive = [a for a in self.agents if a.alive] or self.agents
+        a = max(alive, key=lambda a: len(a.store.records))
+        g = self.world.grid
+        return {"agent": a.id, "effort": a.effort.reshape(g.ny, g.nx), "dets": a.det_count.reshape(g.ny, g.nx),
+                "true_occ": self.true_occ.reshape(g.ny, g.nx), "steps": getattr(self, "steps_run", 0),
+                "prior": self.search_model.prior.reshape(g.ny, g.nx), "n_targets": len(self.found_step)}
 
     def save(self, out_dir: str | Path) -> Path:
         out = Path(out_dir)
@@ -262,6 +280,7 @@ class Simulation:
             "metrics": {k: np.asarray(v) for k, v in self.metrics.items()},
             "events": self.events,
             "summary": self.summary(),
+            "audit": self.audit_inputs(),
         }
         with open(out / "run.pkl", "wb") as f:
             pickle.dump(payload, f, protocol=pickle.HIGHEST_PROTOCOL)

@@ -99,3 +99,40 @@ def sweep_plots(spec, variants, results, out_dir: Path):
     out.append(p)
     return out
 
+
+
+def audit_figure(run: dict, out: Path) -> Path:
+    """Effort, naive, corrected, prior and true activity maps side by side."""
+    from . import audit
+    from .viz import base_map
+    res = audit.compute(run["audit"], run["world"]["cell"])
+    M = res["maps"]
+    ext = run["world"]["extent"]
+    vmax = float(np.quantile(np.concatenate([M[k].ravel() for k in ("corrected", "prior", "truth")]), 0.99))
+    panels = [
+        ("effort", "Observation effort", "looks per cell", None),
+        ("naive", "Naive: detection counts", f"shape error vs truth {res['tv_naive']:.2f}", vmax),
+        ("corrected", "Effort-corrected", f"shape error vs truth {res['tv_corrected']:.2f}", vmax),
+        ("prior", "Rules-based prior only", f"shape error vs truth {res['tv_prior']:.2f}", vmax),
+        ("truth", "True vehicle occupancy", "time-averaged", vmax),
+    ]
+    fig, axes = plt.subplots(1, 5, figsize=(17, 4.2))
+    bg = base_map(run["world"], faint=True)
+    from .viz import _belief_cmap
+    from matplotlib.colors import PowerNorm
+    cmap = _belief_cmap()
+    for ax, (key, title, sub, vm) in zip(axes, panels):
+        ax.imshow(bg, origin="lower", extent=ext)
+        v = vm if vm is not None else float(M[key].max()) or 1.0
+        ax.imshow(M[key], origin="lower", extent=ext, cmap=cmap, norm=PowerNorm(0.5, 0, v), interpolation="nearest")
+        ax.set_title(title, loc="left", fontsize=10)
+        ax.text(0, -0.05, sub, transform=ax.transAxes, fontsize=8.5, color=INK_2, va="top")
+        ax.set_xticks([]); ax.set_yticks([])
+    fig.suptitle(f"Observation-effort bias audit (agent A{run['audit']['agent']}'s records, "
+                 f"{res['block_m']:.0f} m blocks). Rank correlation of detections with effort: "
+                 f"{res['rho_detections_effort']:.2f}; shape error = total-variation distance, 0 = identical",
+                 x=0.01, ha="left", fontsize=10.5, fontweight="bold")
+    fig.tight_layout(rect=(0, 0.05, 1, 0.93))
+    fig.savefig(out, dpi=110)
+    plt.close(fig)
+    return out

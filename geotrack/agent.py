@@ -24,6 +24,10 @@ class Agent:
         self.search = SearchMap(search_model, self.pd, int(cfg["belief"]["snapshot_keep"]))
         self.tracks = TrackSet(track_motion, cfg, seed=cfg["seed"])
         self.seq = 0
+        # Observation effort (looks per cell) and raw detection counts, from every known record.
+        g = search_model.grid
+        self.effort = np.zeros(g.N)
+        self.det_count = np.zeros(g.N)
 
         self.route = None
         self.route_i = 0
@@ -135,6 +139,11 @@ class Agent:
     # ----------------------------------------------------------------- belief
     def update_belief(self, step: int) -> list[int]:
         new, self.new_records = self.new_records, []
+        g = self.search.model.grid
+        for o in new:
+            self.effort[g.disc_cells(o.x, o.y, o.radius)] += 1.0
+            for d in o.dets:
+                self.det_count[int(g.index(d.x, d.y))] += 1.0
         self.search.ingest(new, self.store, step)
         return self.tracks.ingest(new, self.store, step)
 

@@ -23,6 +23,9 @@ def cmd_run(args):
     sim.save(out)
     for k, v in summary.items():
         print(f"  {k:22s} {v}")
+    from .plots import audit_figure
+    from .viz import load_run
+    print(f"audit -> {audit_figure(load_run(out), out / 'bias_audit.png')}")
     if args.animate:
         args.run = str(out)
         args.output = None
