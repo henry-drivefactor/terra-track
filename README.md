@@ -47,6 +47,15 @@ From slope and land cover the world derives **passability** (0 means impassable)
 **ground speed** per cell: fast on roads, slow in forest and on steep ground, zero
 in water or on cliffs.
 
+**Weather.** `world.wetness` runs from 0 (dry) to 1 (saturated). Wet ground:
+- makes slopes impassable sooner,
+- slows forest and off-road travel (at 0.9, mean off-road speed roughly halves),
+- turns low ground near rivers to bog, which is impassable when saturated.
+
+Roads are unaffected. The belief's prior and motion models use
+`belief.assumed_wetness`, which defaults to the true value; set it differently to
+test a belief working from out-of-date ground rules.
+
 ### 2. Targets (`geotrack/targets.py`)
 Ground-truth vehicles follow simple rules:
 - *road* vehicles drive shortest road routes between towns and exits, pausing at each,
@@ -97,6 +106,31 @@ Each discovered target gets a grid particle filter (600 particles).
   down the north road and it was empty, so it went south".
 - If every hypothesis is ruled out, the track re-seeds over unobserved reachable
   ground.
+
+### 5b. Observation effort and bias audit (`geotrack/audit.py`)
+Agents do not look everywhere equally: they loiter over tracks and favour roads.
+A map built only from detection counts therefore shows where the swarm *looked*
+as much as where vehicles *were*.
+
+Every record carries its footprint, so each agent keeps an exact
+**observation-effort** layer (looks per cell) alongside its raw detection counts.
+These are sums, so arrival order doesn't matter.
+
+At the end of a run the **bias audit** (`bias_audit.png` and the `audit_*`
+summary fields) compares four maps of vehicle activity against the true
+time-averaged occupancy, aggregated to 500 m blocks:
+
+| map | how it's built |
+|---|---|
+| naive | detection counts |
+| effort-corrected | detections per look, shrunk towards the prior where effort is thin (8 looks per block, chosen by scanning 0.25–32) |
+| prior only | the rules-based prior |
+| truth | time-averaged true occupancy |
+
+On S1 (6 seeds) the shape error against the truth (total-variation distance)
+was 0.51 for the naive map, 0.47 effort-corrected and 0.63 for the prior alone,
+with the coordinated planner (detections correlate with effort, ρ = 0.44). With
+the lawnmower it was 0.75 naive and 0.58 corrected.
 
 ### 6. Order-independent fusion
 Records from teammates arrive late, out of order, or not at all. Both the search map
@@ -180,6 +214,7 @@ Every metric is measured against **ground truth**, identically for every planner
 | `s1_valley_search.yaml` | 4 agents, 9 vehicles (6 road, 2 off-road, 1 parked) on ridged terrain with a river and road network. Baseline for comparisons. |
 | `s2_degraded_swarm.yaml` | 6 agents, 50% packet loss, 3 km radio range, a 2-minute blackout, agents A1 and A4 lost mid-mission. Beliefs drift apart and re-converge; survivors re-spread once the lost agents' commitments time out. |
 | `s3_terrain_funnel.yaml` | A steep ridge crossable only at two passes and by road; most vehicles drive cross-country. Shows what the terrain constraint buys. |
+| `s4_wet_ground.yaml` | The S1 valley after heavy rain (wetness 0.9): floodplain bog, slow off-road going, two-thirds of vehicles cross-country. Compare with `--set belief.assumed_wetness=0`. |
 
 Override anything from the command line:
 
@@ -212,6 +247,7 @@ python -m geotrack sweep sweeps/terrain_model.yaml  # terrain-constrained vs iso
 python -m geotrack sweep sweeps/replanning.yaml     # open-loop vs per-leg vs event-triggered
 python -m geotrack sweep sweeps/resilience.yaml     # packet loss and agent loss (S2)
 python -m geotrack sweep sweeps/replanning_degraded.yaml  # per-leg vs event-triggered under failures (S2)
+python -m geotrack sweep sweeps/weather.yaml        # dry vs wet ground; weather-aware vs stale prior (S4)
 ```
 
 Each sweep writes `runs/sweeps/<name>/` containing:
@@ -281,6 +317,27 @@ Resends and multi-hop relay keep beliefs close: divergence stays below 0.025.
 Traffic stays at about 2.4–3.4 kB per agent-minute.
 
 
+**Weather** (`sweeps/weather.yaml`, S4, two-thirds of vehicles cross-country)
+
+| condition | localisation | targets found | track error |
+|---|---|---|---|
+| dry ground | 0.24 ± 0.02 | 0.81 ± 0.05 | 1058 ± 146 m |
+| wet ground, belief knows | 0.24 ± 0.02 | 0.78 ± 0.03 | 974 ± 127 m |
+| wet ground, belief assumes dry | 0.27 ± 0.01 | 0.78 ± 0.04 | 794 ± 108 m |
+
+A negative result: **in this setup the weather-aware prior gives no measurable
+benefit.** The stale dry-weather belief is no worse; its edge is within noise.
+
+The models do differ as intended. The weather-aware belief puts 0.16 of the 9
+expected vehicles on bog against 0.82, and predicts off-road speed of 2.0 m/s,
+which matches the truth, against 3.9 m/s. Likely reasons it doesn't help:
+- Bog covers little of where vehicles actually go.
+- Over-estimating speed widens the track clouds, and the wider clouds absorb other
+  model mismatches, such as route choice and stops.
+
+A sharper test would make wetness change the *topology* of movement, for example
+fords or valley floors that close when wet, rather than mainly its speed.
+
 ## Assumptions and limitations
 
 - **Perfect sensing.** Detection inside the footprint is certain and gives true
@@ -309,6 +366,7 @@ geotrack/
   targets.py       ground-truth vehicle behaviour
   observations.py  observation records and per-agent record store
   belief.py        search map: advection-diffusion prediction, negative-information update, rewind
+  audit.py         observation-effort bias audit
   tracking.py      terrain-constrained particle tracks
   planner.py       kinematic rollouts, information-gain scoring, greedy and lawnmower baselines
   agent.py         platform, sensing, gossip, events

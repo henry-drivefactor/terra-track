@@ -21,6 +21,8 @@ SUMMARY_KEYS = [
     ("map_divergence_mean", "belief divergence", "{:.3f}"),
     ("kbytes_per_agent_min", "kB / agent / min", "{:.2f}"),
     ("replans_total", "replans", "{:.0f}"),
+    ("audit_tv_naive", "activity map error, naive", "{:.3f}"),
+    ("audit_tv_corrected", "activity map error, effort-corrected", "{:.3f}"),
 ]
 
 
