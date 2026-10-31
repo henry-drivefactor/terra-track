@@ -26,7 +26,8 @@ DEFAULTS: dict = {
         "n_towns": 7,
         "n_exits": 3,
         "road_loops": 0.35,      # fraction of extra (non-tree) Delaunay edges turned into roads
-        "ridge_walls": [],       # optional [{pos, width, height_m, gaps: [..], gap_width}]
+        "ridge_walls": [],
+        "wetness": 0.0,          # ground wetness, 0 = dry .. 1 = saturated (off-road only)       # optional [{pos, width, height_m, gaps: [..], gap_width}]
     },
     "targets": {
         "road": 6,               # vehicles that drive between road nodes
@@ -55,6 +56,7 @@ DEFAULTS: dict = {
     "belief": {
         "model": "terrain",      # terrain | isotropic
         "expected_targets": None,  # None = true target count
+        "assumed_wetness": None,   # wetness the belief assumes; None = the true value
         "road_weight": 1.0,
         "offroad_weight": 0.04,
         "persistence_s": 20.0,   # heading persistence used to set belief spread rate

@@ -273,7 +273,8 @@ class Simulation:
         payload = {
             "cfg": self.cfg,
             "world": {"elev": w.elev, "water": w.water, "forest": w.forest, "road": w.road,
-                      "passability": w.passability, "towns": w.towns, "exits": w.exits,
+                      "passability": w.passability, "towns": w.towns, "wetness": w.wetness,
+                      "boggy": w.lowland & (w.passability < w.passability_for(0.0)), "exits": w.exits,
                       "extent": w.grid.extent, "cell": w.grid.cell},
             "prior": self.search_model.prior.reshape(w.grid.ny, w.grid.nx),
             "frames": self.frames,

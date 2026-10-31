@@ -1,0 +1,14 @@
+name: weather
+description: >
+  Is a weather-driven prior worth having? Mostly cross-country traffic on the
+  valley terrain: dry ground, wet ground with a belief that knows it is wet, and
+  wet ground with a belief still using dry-weather passability.
+scenario: scenarios/s4_wet_ground.yaml
+seeds: [1, 2, 3, 4, 5, 6, 7, 8]
+overrides:
+  sim.duration_s: 1800
+variants:
+  dry ground: {world.wetness: 0.0}
+  wet ground, belief knows: {}
+  wet ground, belief assumes dry: {belief.assumed_wetness: 0.0}
+plots: [loc_score, track_err_m, found_frac, staleness_s]

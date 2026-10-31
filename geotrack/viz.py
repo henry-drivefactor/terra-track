@@ -24,6 +24,7 @@ SERIES = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#008300", "#62
 BLUE_RAMP = ["#cde2fb", "#9ec5f4", "#6da7ec", "#3987e5", "#256abf", "#184f95", "#0d366b"]
 TRACK = "#eb6834"
 WATER = np.array([0.62, 0.77, 0.96])
+BOG = np.array([0.66, 0.58, 0.47])
 FOREST = np.array([0.80, 0.88, 0.76])
 ROAD = np.array([0.32, 0.32, 0.31])
 
@@ -56,6 +57,8 @@ def base_map(world: dict, faint: bool = False) -> np.ndarray:
     rgb = np.repeat(grey[..., None], 3, axis=2)
     if not faint:
         rgb = np.where(world["forest"][..., None], rgb * FOREST / FOREST.max(), rgb)
+    if "boggy" in world and world["boggy"].any():
+        rgb = np.where(world["boggy"][..., None], 0.5 * rgb + 0.5 * BOG, rgb)
     rgb = np.where(world["water"][..., None], WATER, rgb)
     if not faint:
         rgb = np.where(world["road"][..., None], ROAD, rgb)
@@ -217,8 +220,11 @@ class Animator:
         cfg = self.cfg
         mins, secs = divmod(int(fr["t"]), 60)
         found = int(fr["found"].sum())
+        wet = self.run["world"].get("wetness", 0.0)
+        ground = f"wet ground {wet:.1f}" if wet > 0 else "dry ground"
         self.title.set_text(f"{cfg['name']}  ·  {cfg['planner']['type']} planner, {cfg['planner']['replan']} replanning, "
-                            f"{cfg['belief']['model']} belief  ·  T+{mins:02d}:{secs:02d}  ·  found {found}/{len(fr['found'])}")
+                            f"{cfg['belief']['model']} belief, {ground}  ·  T+{mins:02d}:{secs:02d}  ·  "
+                            f"found {found}/{len(fr['found'])}")
         A = fr["agents"]
         segs = [[A[i, :2], A[j, :2]] for i, j in fr["links"]]
         self.link_lc.set_segments(segs)

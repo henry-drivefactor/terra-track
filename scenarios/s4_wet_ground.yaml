@@ -1,0 +1,25 @@
+# S4 - Wet ground.
+# The S1 valley after heavy rain: the river floodplain is bog, slopes and forest
+# are harder going and off-road speeds roughly halve. Two-thirds of the vehicles
+# travel cross-country. The belief's rules-based prior and motion model use the
+# ground state; set belief.assumed_wetness=0 to give them stale, dry-weather rules.
+name: s4_wet_ground
+seed: 7
+sim:
+  duration_s: 2400
+world:
+  size_m: 10000
+  relief_m: 320
+  n_rivers: 1
+  n_towns: 7
+  n_exits: 3
+  wetness: 0.9
+targets:
+  road: 3
+  offroad: 6
+  static: 0
+agents:
+  count: 4
+planner:
+  type: coordinated
+  replan: event

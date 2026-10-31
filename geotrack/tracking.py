@@ -26,9 +26,10 @@ class TrackMotion:
         g = self.grid = world.grid
         self.dt = cfg["sim"]["dt_s"]
         if terrain:
-            mob = world.mobility.ravel().astype(float)
+            wet = world.assumed_wetness(b)
+            mob = world.mobility_for(wet).ravel().astype(float)
             road = world.road.ravel()
-            self.prior = world.prior_weights(b)
+            self.prior = world.prior_weights(b, wet)
         else:
             mob = np.full(g.N, float(b["isotropic_speed"]))
             road = np.zeros(g.N, bool)

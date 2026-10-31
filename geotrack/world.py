@@ -155,20 +155,44 @@ class World:
         self.slope = np.hypot(gx, gy)
         forest_field = fractal(rng, shape, g.nx / 12)
         self.forest = (forest_field > np.quantile(forest_field, 1 - w["forest_fraction"])) & ~water
-        pas = np.clip(1.0 - (self.slope / w["max_slope"]) ** 1.5, 0.0, 1.0)
-        pas = pas * np.where(self.forest, w["forest_factor"], 1.0)
-        pas[water] = 0.0
-        pas[pas < 0.08] = 0.0
-        self.passability = pas
+        # Low ground near water is where wet weather bites first.
+        near_water = ndimage.distance_transform_edt(~water) * g.cell < 700.0 if water.any() else np.zeros(shape, bool)
+        self.lowland = near_water & (elev < np.quantile(elev, 0.35)) & ~water
+        self.wetness = float(w.get("wetness", 0.0))
 
+        # Roads are laid out on dry-ground passability; weather does not move them.
+        self.passability = self.passability_for(0.0)
         self._build_roads(rng, w)
 
         t = cfg["targets"]
         self.road_speed = t["road_speed"]
-        self.mobility = np.where(self.road, t["road_speed"], t["offroad_speed"] * self.passability)
+        self.offroad_speed = t["offroad_speed"]
+        self.passability = self.passability_for(self.wetness)
+        self.mobility = self.mobility_for(self.wetness)
         self.road_graph = g.graph(np.where(self.road, 1.0, np.inf))
         with np.errstate(divide="ignore"):
             self.xc_graph = g.graph(np.where(self.mobility > 0, 1.0 / np.maximum(self.mobility, 1e-9), np.inf))
+
+    # ---------------------------------------------------------------- weather
+    def passability_for(self, wetness: float) -> np.ndarray:
+        """Off-road passability (0..1) for a ground wetness in [0, 1] (0 = dry, 1 = saturated).
+
+        Wet ground: slopes become impassable sooner, forest floors get harder going,
+        and low ground near rivers turns to bog (impassable when saturated).
+        """
+        w = self.cfg["world"]
+        max_slope = w["max_slope"] * (1.0 - 0.35 * wetness)
+        pas = np.clip(1.0 - (self.slope / max_slope) ** 1.5, 0.0, 1.0)
+        pas = pas * np.where(self.forest, w["forest_factor"] * (1.0 - 0.3 * wetness), 1.0)
+        pas = pas * np.where(self.lowland, 1.0 - wetness, 1.0)
+        pas[self.water] = 0.0
+        pas[pas < 0.08] = 0.0
+        return pas
+
+    def mobility_for(self, wetness: float) -> np.ndarray:
+        """Ground speed (m/s) per cell: road speed on roads, slower off-road when wet."""
+        off = self.offroad_speed * (1.0 - 0.4 * wetness) * self.passability_for(wetness)
+        return np.where(self.road, self.road_speed, off)
 
     # ------------------------------------------------------------------ roads
     def _build_roads(self, rng, w):
@@ -243,7 +267,12 @@ class World:
         self.nodes = np.vstack([self.towns, self.exits]) if len(self.exits) else self.towns
 
     # ------------------------------------------------------------- belief prior
-    def prior_weights(self, belief_cfg: dict) -> np.ndarray:
+    def prior_weights(self, belief_cfg: dict, wetness: float | None = None) -> np.ndarray:
         """Rules-based prior: vehicles concentrate on roads, then on passable open ground."""
-        return np.where(self.road, belief_cfg["road_weight"],
-                        belief_cfg["offroad_weight"] * self.passability).ravel()
+        pas = self.passability if wetness is None else self.passability_for(wetness)
+        return np.where(self.road, belief_cfg["road_weight"], belief_cfg["offroad_weight"] * pas).ravel()
+
+    def assumed_wetness(self, belief_cfg: dict) -> float:
+        """Wetness the belief model assumes: the truth unless configured otherwise."""
+        a = belief_cfg.get("assumed_wetness")
+        return self.wetness if a is None else float(a)

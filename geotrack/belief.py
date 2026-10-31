@@ -39,8 +39,9 @@ class SearchModel:
         self.grid = g
         self.terrain = b["model"] == "terrain"
         if self.terrain:
-            pi = world.prior_weights(b)
-            m = world.mobility.ravel() / world.road_speed
+            wet = world.assumed_wetness(b)
+            pi = world.prior_weights(b, wet)
+            m = world.mobility_for(wet).ravel() / world.road_speed
             v_ref, var_per_sub = world.road_speed, 0.3   # spread along a 1-D road
         else:
             pi = np.ones(g.N)
