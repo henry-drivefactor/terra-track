@@ -218,7 +218,66 @@ Each sweep writes `runs/sweeps/<name>/` containing:
 - `summary.md`: mean ± s.e. per variant,
 - `timeseries.png` and `summary.png`.
 
-RESULTS_PLACEHOLDER
+### Results (8 seeds per variant, 30-minute missions, mean ± s.e.)
+
+These come from synthetic worlds with POC defaults. They show the mechanics work and
+point in the expected directions; they are not performance claims.
+
+**Planners** (`sweeps/planners.yaml`, S1, 4 agents)
+
+| variant | localisation | targets found | track error | area covered | belief divergence |
+|---|---|---|---|---|---|
+| coordinated, terrain belief | **0.30 ± 0.02** | **0.85 ± 0.05** | **875 ± 104 m** | 0.35 | 0.007 |
+| coordinated, isotropic belief | 0.10 ± 0.02 | 0.65 ± 0.06 | 1892 ± 230 m | 0.37 | 0.011 |
+| greedy (myopic, uncoordinated) | 0.22 ± 0.02 | 0.78 ± 0.06 | 1067 ± 90 m | 0.36 | 0.040 |
+| lawnmower | 0.11 ± 0.01 | 0.68 ± 0.05 | 1725 ± 113 m | **0.76** | 0.002 |
+
+- Lawnmower coverage covers twice the area but localises targets worst.
+  Coverage is not information.
+- Coordinated planning beats myopic, uncoordinated planning on every target
+  metric, and agents' maps stay about 5× more alike.
+
+**Terrain constraint** (`sweeps/terrain_model.yaml`, S3, ridge and passes)
+
+| belief / tracker | localisation | targets found | track error |
+|---|---|---|---|
+| terrain-constrained | **0.25 ± 0.02** | **0.76 ± 0.04** | **849 ± 64 m** |
+| isotropic | 0.11 ± 0.01 | 0.62 ± 0.06 | 1857 ± 287 m |
+
+The terrain constraint is the largest single effect measured. It more than doubles
+localisation and halves track error, here and in S1.
+
+**Replanning** (`sweeps/replanning.yaml` on S1; `sweeps/replanning_degraded.yaml` on S2)
+
+| scenario | mode | localisation | track error | replans | kB / agent / min |
+|---|---|---|---|---|---|
+| S1 | open loop | 0.26 ± 0.02 | 995 ± 77 m | 28 | 1.82 |
+| S1 | per leg | 0.29 ± 0.02 | 846 ± 140 m | 121 | 2.04 |
+| S1 | event-triggered | 0.30 ± 0.02 | 875 ± 104 m | 147 | 2.11 |
+| S2 (failures) | per leg | 0.29 ± 0.03 | 911 ± 129 m | 152 | 3.04 |
+| S2 (failures) | event-triggered | 0.28 ± 0.01 | 861 ± 104 m | 202 | 3.12 |
+
+Closed-loop replanning beats open loop. Event triggers on top of 1-minute
+per-leg replanning made **no measurable difference** to localisation here, even
+with failures; they did roughly halve belief divergence in S2 (0.024 vs 0.041). The
+likely reason is that a 1-minute leg is already short compared with how fast
+the picture changes. Event triggers should matter more with longer legs or
+faster targets, which is a natural next experiment.
+
+**Resilience** (`sweeps/resilience.yaml`, S2, 6 agents)
+
+| condition | localisation | track error | belief divergence |
+|---|---|---|---|
+| 10% loss, no failures (reference) | 0.33 ± 0.03 | 686 ± 75 m | 0.018 |
+| 0% loss + blackout + 2 agents lost | 0.30 ± 0.03 | 868 ± 73 m | 0.017 |
+| 30% loss + blackout + 2 agents lost | 0.27 ± 0.03 | 889 ± 96 m | 0.023 |
+| 60% loss + blackout + 2 agents lost | 0.30 ± 0.01 | 776 ± 67 m | 0.014 |
+
+The swarm degrades gracefully. Losing a third of the agents plus a blackout costs
+about 10% localisation, and up to 60% packet loss makes no clear further difference.
+Resends and multi-hop relay keep beliefs close: divergence stays below 0.025.
+Traffic stays at about 2.4–3.4 kB per agent-minute.
+
 
 ## Assumptions and limitations
 
