@@ -154,14 +154,14 @@ class Agent:
     def check_events(self, step: int, created: list[int], overlap_threshold: float) -> list[str]:
         events = []
         if created:
-            events.append(f"new target {created}")
+            events.append("new target " + ",".join(f"T{k}" for k in created))
         for a, tm in self.team.items():
             if a == self.id:
                 continue
             age = step - tm["status"][0]
             if age > self.timeout_steps and a not in self.stale:
                 self.stale.add(a)
-                events.append(f"lost contact with agent {a}")
+                events.append(f"lost contact A{a}")
             elif age <= self.timeout_steps and a in self.stale:
                 self.stale.discard(a)
         for a in dict.fromkeys(self.received_plans):
@@ -171,7 +171,7 @@ class Agent:
             # The earlier plan (ties: lower id) has right of way; the later planner yields.
             if (ps < self.plan_step or (ps == self.plan_step and a < self.id)) and self.route is not None:
                 if _overlap(self.route[self.route_i:], route[step - ps:], self.R) > overlap_threshold:
-                    events.append(f"plan conflict with agent {a}")
+                    events.append(f"plan conflict A{a}")
         self.received_plans.clear()
         return events
 

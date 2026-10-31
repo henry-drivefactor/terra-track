@@ -1,0 +1,29 @@
+# S2 - Degraded swarm.
+# Six agents over the same kind of terrain, but with heavy packet loss, shorter
+# radio range, a two-minute comms blackout and two agents lost mid-mission.
+# Shows belief maps drifting apart and re-converging, and the survivors
+# re-spreading once the lost agents' commitments time out.
+name: s2_degraded_swarm
+seed: 11
+sim:
+  duration_s: 2400
+world:
+  size_m: 10000
+  relief_m: 320
+targets:
+  road: 6
+  offroad: 2
+  static: 1
+agents:
+  count: 6
+comms:
+  range_m: 3000
+  loss: 0.5
+  heartbeat_timeout_s: 45
+events:
+  - {type: agent_loss, agent: 1, t_s: 600}
+  - {type: blackout, t_s: 900, until_s: 1020}
+  - {type: agent_loss, agent: 4, t_s: 1260}
+planner:
+  type: coordinated
+  replan: event

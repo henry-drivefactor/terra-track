@@ -1,0 +1,27 @@
+# S3 - Terrain funnel.
+# A steep ridge splits the area, crossable only at two passes and by road.
+# Most vehicles travel cross-country, so a terrain-aware motion model should
+# predict them funnelling through the passes; an isotropic model spreads its
+# belief over the ridge. Run with belief.model=isotropic to compare.
+name: s3_terrain_funnel
+seed: 5
+sim:
+  duration_s: 2400
+world:
+  size_m: 10000
+  relief_m: 220
+  n_rivers: 0
+  n_towns: 6
+  n_exits: 2
+  ridge_walls:
+    - {pos: 0.5, width: 0.05, height_m: 450, gaps: [0.22, 0.74], gap_width: 0.04}
+targets:
+  road: 3
+  offroad: 6
+  static: 0
+  offroad_speed: 6.0
+agents:
+  count: 4
+planner:
+  type: coordinated
+  replan: event

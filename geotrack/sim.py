@@ -112,7 +112,7 @@ class Simulation:
             a = self.agents[self.losses[step]]
             if a.alive:
                 a.alive = False
-                self.log(step, f"agent {a.id} lost")
+                self.log(step, f"A{a.id} LOST")
         self.targets.step(now - self.dt, self.dt)
         tpos, th, ts = self.targets.positions(), self.targets.headings(), self.targets.speeds()
         alive = [a for a in self.agents if a.alive]
@@ -121,13 +121,13 @@ class Simulation:
             for k in a.sense(step, tpos, th, ts):
                 if self.found_step[k] < 0:
                     self.found_step[k] = step
-                    self.log(step, f"agent {a.id} found target {k}")
+                    self.log(step, f"A{a.id} found T{k}")
                 self.last_seen[k] = step
             self.observed[self.world.grid.disc_cells(a.x, a.y, a.R)] = True
         if self.net.blacked_out(now) and not self.net.blacked_out(now - self.dt):
-            self.log(step, "comms blackout begins")
+            self.log(step, "COMMS BLACKOUT")
         if not self.net.blacked_out(now) and self.net.blacked_out(now - self.dt):
-            self.log(step, "comms blackout ends")
+            self.log(step, "comms restored")
         links = self.net.exchange(self.agents, [a.make_packet(step) for a in alive], now)
         for a in alive:
             created = a.update_belief(step)
@@ -144,7 +144,7 @@ class Simulation:
                 reason = "; ".join(events)
                 a.last_event_replan = step
                 self.event_replans += 1
-                self.log(step, f"agent {a.id} replans: {reason}")
+                self.log(step, f"A{a.id} replan: {reason}")
             if reason:
                 a.set_plan(self.planner.plan(a, step), step)
                 self.replans += 1

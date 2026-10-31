@@ -127,7 +127,7 @@ class Animator:
         self.b_panels = []
         for i in range(self.n):
             r, c = divmod(i, cols)
-            ax = self.fig.add_axes([0.53 + c * cw, 0.92 - (r + 1) * ch + 0.02, side, ch - 0.05])
+            ax = self.fig.add_axes([0.53 + c * cw, 0.92 - (r + 1) * ch + 0.02, side * 0.93, ch - 0.06])
             self.b_panels.append(self._belief_panel(ax, w, i, big=False))
         self.ax_m = []
         self.cursors = []
@@ -294,7 +294,7 @@ class Animator:
         return out
 
     def snapshot(self, out: str | Path, k: int | None = None):
-        self.draw(len(self.frames) - 1 if k is None else k)
+        self.draw(len(self.frames) - 1 if k is None else min(k, len(self.frames) - 1))
         self.fig.savefig(out, dpi=100)
         plt.close(self.fig)
         return out
