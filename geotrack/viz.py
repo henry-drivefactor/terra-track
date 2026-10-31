@@ -93,6 +93,7 @@ class Animator:
         prior = run["prior"]
         f = prior.shape[0] // self.frames[0]["lam"][0].shape[0]
         vmax = float(prior.reshape(prior.shape[0] // f, f, prior.shape[1] // f, f).mean((1, 3)).max())
+        vmax = max(vmax, 4.0 * float(prior.mean()))   # keep a flat (isotropic) prior mid-scale, not saturated
         self.norm = PowerNorm(gamma=0.5, vmin=0.0, vmax=vmax)
         self.trail = int(120 / (self.cfg["sim"]["dt_s"] * self.cfg["sim"]["frame_every"]))
         self.metric_t = run["metrics"]["t"]
