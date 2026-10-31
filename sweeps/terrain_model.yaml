@@ -1,0 +1,13 @@
+name: terrain_model
+description: >
+  What is the terrain constraint worth? Same coordinated planner, with a
+  terrain-constrained belief and tracker vs an isotropic (terrain-agnostic) one,
+  in the ridge-and-passes scenario where most vehicles drive cross-country.
+scenario: scenarios/s3_terrain_funnel.yaml
+seeds: [1, 2, 3, 4, 5, 6, 7, 8]
+overrides:
+  sim.duration_s: 1800
+variants:
+  terrain-constrained: {belief.model: terrain}
+  isotropic: {belief.model: isotropic}
+plots: [loc_score, track_err_m, found_frac, staleness_s]

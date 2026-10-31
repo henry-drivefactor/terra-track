@@ -1,0 +1,15 @@
+name: planners
+description: >
+  Does information-driven, coordinated routing beat simpler strategies?
+  Coordinated planner vs the same planner with a terrain-agnostic belief,
+  a myopic uncoordinated greedy planner, and fixed lawnmower coverage.
+scenario: scenarios/s1_valley_search.yaml
+seeds: [1, 2, 3, 4, 5, 6, 7, 8]
+overrides:
+  sim.duration_s: 1800
+variants:
+  coordinated: {planner.type: coordinated}
+  coordinated, isotropic belief: {planner.type: coordinated, belief.model: isotropic}
+  greedy (myopic, uncoordinated): {planner.type: greedy}
+  lawnmower: {planner.type: lawnmower}
+plots: [loc_score, found_frac, track_err_m, coverage]

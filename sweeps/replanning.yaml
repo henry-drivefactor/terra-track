@@ -1,0 +1,14 @@
+name: replanning
+description: >
+  When should agents replan? Open-loop (fly each 5-minute plan to the end),
+  replan every leg (1 minute), or replan every leg and immediately on events
+  (new target, lost teammate, plan conflict).
+scenario: scenarios/s1_valley_search.yaml
+seeds: [1, 2, 3, 4, 5, 6, 7, 8]
+overrides:
+  sim.duration_s: 1800
+variants:
+  open loop: {planner.replan: open_loop}
+  per leg: {planner.replan: per_leg}
+  event-triggered: {planner.replan: event}
+plots: [loc_score, track_err_m, replans, kbytes]

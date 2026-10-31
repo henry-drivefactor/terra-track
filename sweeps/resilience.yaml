@@ -1,0 +1,14 @@
+name: resilience
+description: >
+  How gracefully does the swarm degrade? Six agents with increasing packet loss
+  (all with the scripted blackout and two agent losses), plus a clean-run reference.
+scenario: scenarios/s2_degraded_swarm.yaml
+seeds: [1, 2, 3, 4, 5, 6, 7, 8]
+overrides:
+  sim.duration_s: 1800
+variants:
+  "reference: 10% loss, no failures": {comms.loss: 0.1, events: []}
+  0% loss + failures: {comms.loss: 0.0}
+  30% loss + failures: {comms.loss: 0.3}
+  60% loss + failures: {comms.loss: 0.6}
+plots: [loc_score, map_divergence, alive, kbytes]
