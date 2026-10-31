@@ -44,7 +44,6 @@ DEFAULTS: dict = {
         "footprint_m": 250.0,    # sensor ground footprint radius
         "pd": 1.0,               # detection probability inside the footprint
         "base": [0.08, 0.08],    # launch point as a fraction of the area
-        "start_spacing_s": 0.0,  # stagger launches
     },
     "comms": {
         "range_m": 4000.0,
@@ -99,7 +98,10 @@ def set_dotted(cfg: dict, key: str, value) -> None:
     d = cfg
     for p in parts[:-1]:
         d = d.setdefault(p, {})
-    d[parts[-1]] = value
+    if isinstance(value, dict) and isinstance(d.get(parts[-1]), dict):
+        d[parts[-1]] = deep_merge(d[parts[-1]], value)
+    else:
+        d[parts[-1]] = value
 
 
 def load_scenario(path: str | Path | None = None, overrides: dict | None = None) -> dict:
