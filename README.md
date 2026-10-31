@@ -209,6 +209,7 @@ python -m geotrack sweep sweeps/planners.yaml       # coordinated vs isotropic v
 python -m geotrack sweep sweeps/terrain_model.yaml  # terrain-constrained vs isotropic belief (S3)
 python -m geotrack sweep sweeps/replanning.yaml     # open-loop vs per-leg vs event-triggered
 python -m geotrack sweep sweeps/resilience.yaml     # packet loss and agent loss (S2)
+python -m geotrack sweep sweeps/replanning_degraded.yaml  # per-leg vs event-triggered under failures (S2)
 ```
 
 Each sweep writes `runs/sweeps/<name>/` containing:

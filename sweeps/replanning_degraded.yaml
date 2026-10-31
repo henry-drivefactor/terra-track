@@ -1,0 +1,13 @@
+name: replanning_degraded
+description: >
+  Event-triggered replanning should matter most when things go wrong. Per-leg vs
+  event-triggered replanning in the degraded-swarm scenario (packet loss,
+  blackout, two agents lost).
+scenario: scenarios/s2_degraded_swarm.yaml
+seeds: [1, 2, 3, 4, 5, 6, 7, 8]
+overrides:
+  sim.duration_s: 1800
+variants:
+  per leg: {planner.replan: per_leg}
+  event-triggered: {planner.replan: event}
+plots: [loc_score, track_err_m, replans, coverage]

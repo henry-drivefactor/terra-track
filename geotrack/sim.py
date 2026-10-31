@@ -232,7 +232,7 @@ class Simulation:
             "targets": n_t,
             "found_final": float(m["found_frac"][-1]),
             "t_found_50_s": t_frac(0.5),
-            "t_found_90_s": t_frac(0.9),
+            "t_found_75_s": t_frac(0.75),
             "t_found_all_s": t_frac(1.0),
             "loc_score_mean": float(np.mean(m["loc_score"])),
             "loc_score_2nd_half": float(np.mean(m["loc_score"][half:])),

@@ -14,7 +14,7 @@ from .config import load_scenario
 SUMMARY_KEYS = [
     ("loc_score_mean", "localisation score (mean)", "{:.3f}"),
     ("found_final", "targets found (final)", "{:.2f}"),
-    ("t_found_90_s", "time to find 90% (s)", "{:.0f}"),
+    ("t_found_75_s", "time to find 75% (s)", "{:.0f}"),
     ("track_err_m_mean", "track error (m)", "{:.0f}"),
     ("staleness_s_mean", "time since last seen (s)", "{:.0f}"),
     ("coverage_final", "area covered (final)", "{:.2f}"),
