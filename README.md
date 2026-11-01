@@ -1,4 +1,4 @@
-# geo-trackbot
+# Terra Track
 
 A proof-of-concept simulation of **decentralised active search and terrain-constrained
 tracking**. A small swarm of fixed-wing agents (3–10) searches an area for ground
