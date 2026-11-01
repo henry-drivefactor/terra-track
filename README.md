@@ -151,15 +151,34 @@ There are four kinds of candidate:
 - pursuit of each track's predicted position,
 - the remainder of the current route.
 
-Each candidate is scored in **nats of expected information gain** over a 5-minute horizon:
+By default (`planner.objective: entropy`), each candidate is scored by the
+**expected reduction in total belief uncertainty** over a 5-minute horizon,
+discounted by time:
 
 ```
-  w_search · E[new detections along the route] · H(where an undiscovered target is)
-+ w_track  · Σ_tracks  P(re-observe the target) · H(track forecast at that time)
+  w_search · Σ_cells first swept  H(cell holds an undiscovered target)
++ w_track  · Σ_tracks  P(re-observe the target) · U(track)
 ```
 
-Entropies are measured over footprint-sized bins, so the two terms are in the same
-units, and gains are discounted by time.
+- `H` is the entropy of the Bernoulli variable "this cell is occupied", with
+  `P = 1 − exp(−λ)`. Perfect sensing removes it.
+- `U(track)` is the uncertainty the track adds to the map: its particles are
+  smoothed by one motion step and scored with the same per-cell entropy, minus
+  the floor of a fresh sighting.
+
+Because the advection–diffusion prediction regrows uncertainty in ground that
+has been searched, reducing it drives both spreading out and revisiting.
+
+The alternative `planner.objective: detections` scores
+`E[new detections] · H(where an undiscovered target is) + Σ P(re-observe) · H(track)`,
+with footprint-binned entropies. It favours the highest-intensity ground and
+known vehicles, and concentrates agents (see *Mission weights* below).
+
+**Total belief uncertainty** is the search map's per-cell entropy plus every
+track's `U(track)`, in nats. It is reported as the `belief_uncertainty` metric. An
+earlier version measured tracks with the raw particle histogram, which saturates
+at `ln(#particles)`, so a lost track looked no worse than a blurred one; the
+smoothed version keeps growing.
 
 ### 8. Decentralised coordination
 Before scoring, an agent removes from its belief everything its teammates' **committed
@@ -167,8 +186,9 @@ legs** are expected to observe:
 - intensity under their committed footprints,
 - track particles they will fly over.
 
-Only the next two legs (2 minutes) count as committed, because teammates replan
-after that.
+Only the next five legs (5 minutes, the whole horizon by default) count as
+committed (`planner.commit_legs`). Two legs left 17% of agent pairs within 1 km of
+each other; five legs cut that to 7–8%.
 
 When an agent receives a plan it didn't know about when it planned, and the two
 overlap, the earlier plan has right of way (ties go to the lower ID) and the later
@@ -197,6 +217,7 @@ Every metric is measured against **ground truth**, identically for every planner
 
 | metric | meaning |
 |---|---|
+| `belief_uncertainty` | total uncertainty in the agent's belief map (nats, averaged over agents): search-map entropy plus each track's excess. Model-based, so read it together with `loc_score` |
 | `loc_score` | headline metric: mean over all targets of the belief mass within 250 m of the true position (track particles if found, search intensity if not). 1 = every target pinned down |
 | `found_frac` | fraction of targets seen at least once |
 | `track_err_m` | mean distance of track particles from the true position |
@@ -256,10 +277,59 @@ Each sweep writes `runs/sweeps/<name>/` containing:
 - `summary.md`: mean ± s.e. per variant,
 - `timeseries.png` and `summary.png`.
 
-### Results (8 seeds per variant, 30-minute missions, mean ± s.e.)
+### Results
 
 These come from synthetic worlds with POC defaults. They show the mechanics work and
-point in the expected directions; they are not performance claims.
+point in the expected directions; they are not performance claims. All runs are
+30-minute missions; values are mean ± s.e. over seeds.
+
+**Swarm size** (`sweeps/swarm_size.yaml`, S1, 6 seeds; current defaults)
+
+![swarm size scaling](docs/swarm_size_scaling.png)
+
+| agents | uncertainty (nats), coordinated | uncertainty (nats), lawnmower | localisation, coordinated | localisation, lawnmower | found, coordinated | found, lawnmower |
+|---|---|---|---|---|---|---|
+| 1 | **69.7 ± 0.9** | 71.6 ± 0.2 | **0.09 ± 0.01** | 0.06 ± 0.01 | **0.57** | 0.15 |
+| 2 | **62.8 ± 1.0** | 71.2 ± 0.4 | **0.11 ± 0.01** | 0.07 ± 0.00 | **0.72** | 0.46 |
+| 3 | **58.5 ± 0.9** | 61.5 ± 1.3 | **0.15 ± 0.02** | 0.08 ± 0.01 | **0.87** | 0.48 |
+| 4 | **51.0 ± 0.7** | 54.3 ± 0.2 | **0.18 ± 0.02** | 0.11 ± 0.01 | **0.83** | 0.69 |
+| 6 | **41.5 ± 0.7** | 45.5 ± 0.7 | **0.26 ± 0.01** | 0.16 ± 0.02 | **0.98** | 0.80 |
+| 8 | **33.9 ± 0.3** | 39.2 ± 0.4 | **0.30 ± 0.02** | 0.21 ± 0.01 | **0.94** | 0.93 |
+| 10 | **30.9 ± 0.5** | 34.1 ± 0.2 | **0.38 ± 0.01** | 0.22 ± 0.01 | **1.00** | 0.96 |
+
+- The coordinated planner leaves less uncertainty than lawnmower sweeps at every
+  swarm size, even though lawnmowers cover more ground: at 4 agents it covers 52% of
+  the area against 76%.
+- Its localisation advantage *grows* with swarm size, from 1.5× at 1 agent to about
+  1.7× at 10. Lawnmower strips stop helping once ground is covered, while the
+  planner turns extra agents into tracking.
+- For small swarms the planner finds far more vehicles: 57% vs 15% with one agent,
+  because it searches roads first.
+- Lawnmower track error at 1 agent (366 m) is a selection effect: it found only
+  15% of vehicles, mostly ones it happened to pass repeatedly.
+
+**Mission weights** (`sweeps/mission_weights.yaml`, S1, 4 agents, 6 seeds)
+
+| planner | uncertainty (nats) | localisation | area covered | track error |
+|---|---|---|---|---|
+| uncertainty, w_track 1 (default) | **51.0 ± 0.7** | 0.18 ± 0.02 | 0.52 | 1356 m |
+| uncertainty, w_track 4 | 51.6 ± 0.9 | 0.21 ± 0.02 | 0.45 | 1098 m |
+| uncertainty, w_track 16 | 54.2 ± 1.3 | 0.25 ± 0.03 | 0.39 | 1014 m |
+| detections objective | 54.3 ± 0.6 | **0.30 ± 0.02** | 0.38 | **916 m** |
+
+Minimising total uncertainty and pinning down known vehicles pull in different
+directions:
+- Most of the map's uncertainty is unsearched ground, so the uncertainty
+  objective sweeps.
+- Localisation rewards staying on found vehicles, which the detection-driven
+  objective does, at the cost of clustering agents near them.
+- `w_track 4` is a cheap compromise: about +1 nat of uncertainty for +0.03 localisation.
+
+The objective and weights are mission settings.
+
+*The tables below were produced with the earlier defaults (detection-driven
+objective, 2-leg commitments, 8 seeds). The comparisons within each table hold;
+absolute numbers differ from the current defaults.*
 
 **Planners** (`sweeps/planners.yaml`, S1, 4 agents)
 
