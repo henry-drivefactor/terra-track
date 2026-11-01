@@ -76,6 +76,33 @@ def _belief_cmap():
     return ListedColormap(np.column_stack([rgb, alpha]))
 
 
+def _merge_events(events, t_now):
+    """Collapse same-time, same-reason replans: 'A5 replan: X', 'A6 replan: X' -> 'A5,A6 replan: X'."""
+    out, groups = [], {}
+    for t, txt in events:
+        if t > t_now:
+            break
+        if " replan: " in txt:
+            who, why = txt.split(" replan: ", 1)
+            key = (t, why)
+            if key in groups:
+                out[groups[key]][1].append(who)
+                continue
+            groups[key] = len(out)
+            out.append((t, [who], why))
+        else:
+            out.append((t, None, txt))
+    lines = []
+    for t, who, txt in out:
+        stamp = f"{int(t) // 60:02d}:{int(t) % 60:02d}"
+        if who is None:
+            lines.append(f"{stamp} {txt}")
+        else:
+            names = ",".join(who) if len(who) <= 3 else f"{len(who)} agents"
+            lines.append(f"{stamp} {names} replan: {txt}")
+    return lines
+
+
 def _tri(x, y, h, size):
     pts = np.array([[1.0, 0.0], [-0.6, 0.55], [-0.35, 0.0], [-0.6, -0.55]]) * size
     c, s = np.cos(h), np.sin(h)
@@ -145,7 +172,8 @@ class Animator:
         ax.set_xticks([]); ax.set_yticks([])
         for s in ax.spines.values():
             s.set_visible(True); s.set_color(GRID)
-        self.title = ax.set_title("", loc="left")
+        self.title = ax.set_title("", loc="left", pad=18)
+        self.subtitle = ax.text(0.0, 1.012, "", transform=ax.transAxes, fontsize=8.5, color=INK_2, va="bottom")
         self.link_lc = LineCollection([], colors=MUTED, linewidths=0.9, linestyles=(0, (3, 3)), zorder=4)
         ax.add_collection(self.link_lc)
         self.a_poly, self.a_fp, self.a_route, self.a_trail, self.a_lbl = [], [], [], [], []
@@ -222,9 +250,15 @@ class Animator:
         found = int(fr["found"].sum())
         wet = self.run["world"].get("wetness", 0.0)
         ground = f"wet ground {wet:.1f}" if wet > 0 else "dry ground"
-        self.title.set_text(f"{cfg['name']}  ·  {cfg['planner']['type']} planner, {cfg['planner']['replan']} replanning, "
-                            f"{cfg['belief']['model']} belief, {ground}  ·  T+{mins:02d}:{secs:02d}  ·  "
+        p = cfg["planner"]
+        if p["type"] == "lawnmower":
+            how = "lawnmower sweep (fixed strips)"
+        else:
+            obj = "uncertainty-reduction" if p.get("objective", "entropy") == "entropy" else "detection-driven"
+            how = f"{p['type']} {obj} planner, {p['replan'].replace('_', '-')} replanning"
+        self.title.set_text(f"{cfg['name']}  ·  {self.n} agents  ·  T+{mins:02d}:{secs:02d}  ·  "
                             f"found {found}/{len(fr['found'])}")
+        self.subtitle.set_text(f"{how}  ·  {cfg['belief']['model']} belief  ·  {ground}")
         A = fr["agents"]
         segs = [[A[i, :2], A[j, :2]] for i, j in fr["links"]]
         self.link_lc.set_segments(segs)
@@ -278,8 +312,7 @@ class Animator:
         for c in self.cursors:
             c.set_xdata([fr["t"] / 60.0, fr["t"] / 60.0])
         if self.legend_text is not None:
-            ev = [f"{int(t) // 60:02d}:{int(t) % 60:02d} {txt}" for t, txt in self.run["events"] if t <= fr["t"]]
-            ev = [e if len(e) <= 34 else e[:33] + "…" for e in ev[-16:]]
+            ev = [e if len(e) <= 34 else e[:33] + "…" for e in _merge_events(self.run["events"], fr["t"])[-16:]]
             mt = fr["metrics"]
             head = (f"found        {mt.get('found_frac', 0):.2f}\nlocalisation {mt.get('loc_score', 0):.2f}\n"
                     f"coverage     {mt.get('coverage', 0):.2f}\ndivergence   {mt.get('map_divergence', 0):.3f}\n"
