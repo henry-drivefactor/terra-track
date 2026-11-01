@@ -30,6 +30,18 @@ from .world import DIR_LEN, World
 _BASE_RATE = 0.15
 
 
+def cell_entropy(lam: np.ndarray) -> np.ndarray:
+    """Per-cell uncertainty (nats) of "is there an undiscovered target here?".
+
+    With Poisson intensity lam, P(occupied) = 1 - exp(-lam); this is that Bernoulli
+    variable's entropy. Observing a cell with perfect sensing removes all of it.
+    """
+    p = -np.expm1(-lam)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        h = -p * np.log(p) + np.exp(-lam) * lam
+    return np.where(p > 0, h, 0.0)
+
+
 class SearchModel:
     """Shared, read-only prediction operator for one belief model (terrain or isotropic)."""
 
@@ -75,6 +87,29 @@ class SearchModel:
         for _ in range(self.substeps):
             lam = self.PT @ lam
         return lam
+
+    def track_uncertainty(self, cells: np.ndarray) -> float:
+        """Uncertainty (nats) a track adds to the belief map, above that of a fresh sighting.
+
+        The particle histogram is smoothed by one step of the motion model, so a
+        spreading track keeps gaining entropy instead of saturating at log(#particles),
+        and scored with the same per-cell entropy as the search map.
+        """
+        q = np.bincount(cells, minlength=self.grid.N) / len(cells)
+        return max(0.0, float(cell_entropy(self.predict(q)).sum()) - self.track_floor)
+
+    @property
+    def track_floor(self) -> float:
+        """Entropy of a just-sighted target (a point, smoothed by one motion step), on a typical cell."""
+        if not hasattr(self, "_floor"):
+            cand = np.flatnonzero(self.prior >= np.quantile(self.prior[self.prior > 0], 0.9))
+            vals = []
+            for c in cand[:: max(1, len(cand) // 20)][:20]:
+                q = np.zeros(self.grid.N)
+                q[c] = 1.0
+                vals.append(cell_entropy(self.predict(q)).sum())
+            self._floor = float(np.median(vals))
+        return self._floor
 
 
 class SearchMap:

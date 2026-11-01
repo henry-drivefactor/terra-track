@@ -72,7 +72,8 @@ DEFAULTS: dict = {
         "replan": "event",       # open_loop | per_leg | event
         "horizon_s": 300.0,
         "leg_s": 60.0,
-        "commit_legs": 2,        # how much of a route teammates treat as committed (open_loop: all of it)
+        "commit_legs": 5,        # how much of a route teammates treat as committed (open_loop: all of it)
+        "objective": "entropy",  # entropy (reduce total belief uncertainty) | detections
         "w_search": 1.0,
         "w_track": 1.0,
         "discount_per_min": 0.9,

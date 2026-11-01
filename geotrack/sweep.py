@@ -13,6 +13,7 @@ from .config import load_scenario
 
 SUMMARY_KEYS = [
     ("loc_score_mean", "localisation score (mean)", "{:.3f}"),
+    ("belief_uncertainty_mean", "belief uncertainty, nats (mean)", "{:.0f}"),
     ("found_final", "targets found (final)", "{:.2f}"),
     ("t_found_75_s", "time to find 75% (s)", "{:.0f}"),
     ("track_err_m_mean", "track error (m)", "{:.0f}"),
@@ -42,7 +43,18 @@ def run_sweep(path: str, workers: int = 0, out: str | None = None) -> Path:
     out_dir = Path(out or f"runs/sweeps/{name}")
     out_dir.mkdir(parents=True, exist_ok=True)
     base = spec.get("overrides", {})
-    variants = spec["variants"]
+    grid = spec.get("grid")
+    if grid:
+        # Cross product: one variant per (series, x value).
+        xk = grid["x"]["key"]
+        variants, meta = {}, {}
+        for sname, sov in grid["series"].items():
+            for xv in grid["x"]["values"]:
+                v = f"{sname} | {xv}"
+                variants[v] = {**(sov or {}), xk: xv}
+                meta[v] = (sname, xv)
+    else:
+        variants = spec["variants"]
     seeds = spec["seeds"]
     jobs = [(spec["scenario"], {**base, **(ov or {})}, v, s) for v, ov in variants.items() for s in seeds]
     workers = workers or max(1, (os.cpu_count() or 2) - 1)
@@ -75,8 +87,9 @@ def run_sweep(path: str, workers: int = 0, out: str | None = None) -> Path:
     table = _markdown(spec, variants, results)
     (out_dir / "summary.md").write_text(table)
     print("\n" + table)
-    from .plots import sweep_plots
-    for p in sweep_plots(spec, list(variants), results, out_dir):
+    from .plots import scaling_plot, sweep_plots
+    plots = scaling_plot(spec, meta, results, out_dir) if grid else sweep_plots(spec, list(variants), results, out_dir)
+    for p in plots:
         print(f"plot -> {p}")
     return out_dir
 

@@ -5,13 +5,20 @@ fixed-wing kinematics: a fan of two-segment constant-turn manoeuvres, pursuit
 routes to the highest-value regions of the belief, pursuit of each track's
 predicted position, and the remainder of the current route.
 
-Each candidate is scored in nats of expected information gain:
+Each candidate is scored by the expected reduction in total belief uncertainty
+(objective "entropy", the default), in nats, discounted by time:
 
-    w_search * E[new detections] x H(where an undiscovered target is)
-  + w_track  * sum over tracks of P(re-observe) x H(track forecast at that time)
+    w_search * sum over cells first swept of H(cell occupied by an undiscovered target)
+  + w_track  * sum over tracks of P(re-observe) x H(track position forecast at that time)
 
-Entropies are measured over footprint-sized bins, so "one nat" means the same
-thing for both terms; gains are discounted by time to reward getting there early.
+Observing a cell with perfect sensing removes its uncertainty; re-observing a
+tracked target collapses its position entropy. Because the advection-diffusion
+prediction regrows uncertainty in cleared ground, minimising it drives both
+spreading out and revisiting.
+
+The alternative objective "detections" scores E[new detections] x H(where an
+undiscovered target is), with entropies over footprint-sized bins; it favours the
+highest-intensity ground and tends to concentrate agents.
 
 after first removing everything teammates' committed legs are already expected
 to observe. That conditioning is the coordination mechanism: no central
@@ -22,6 +29,7 @@ from __future__ import annotations
 import numpy as np
 from scipy import ndimage
 
+from .belief import cell_entropy
 from .world import World
 
 
@@ -81,6 +89,7 @@ class InfoPlanner:
         self.R = a["footprint_m"]
         self.pd = a["pd"]
         self.w_search, self.w_track = p["w_search"], p["w_track"]
+        self.objective = p.get("objective", "entropy")
         self.n_goals = 0 if greedy else int(p["n_goals"])
         self.n_part = int(p["plan_particles"])
         self.dy, self.dx = self.g.disc_offsets(self.R)
@@ -136,7 +145,11 @@ class InfoPlanner:
         for tr in agent.tracks.tracks.values():
             F = agent.tracks.forecast(tr, n, self.stride, self.n_part, [self.seed, agent.id, tr.tid, step])
             cells = g.index(F[..., 0], F[..., 1])
-            Hk = np.array([self._entropy(cells[:, j]) for j in range(cells.shape[1])])
+            if self.objective == "detections":
+                Hk = np.array([self._entropy(cells[:, j]) for j in range(cells.shape[1])])
+            else:
+                # Uncertainty this track adds to the map now; re-observing it removes it.
+                Hk = np.full(cells.shape[1], agent.search.model.track_uncertainty(tr.cells))
             covered = np.zeros(len(F), bool)
             for r in team:
                 m = min(len(ev), len(r) // self.stride)
@@ -153,7 +166,7 @@ class InfoPlanner:
         rates[:, :self.leg] = r1.ravel()[:, None]
         rates[:, self.leg:3 * self.leg] = r2.ravel()[:, None]
         cands.append(kin.rollout(agent.x, agent.y, agent.h, n, rates=rates))
-        goals = self._value_goals(lam, track_data) if self.n_goals else np.empty((0, 2))
+        goals = self._value_goals(self._cell_value(lam), track_data) if self.n_goals else np.empty((0, 2))
         if not self.greedy:
             tg = [self._track_goal(agent, F, ev) for _, F, _, _ in track_data]
             if tg:
@@ -170,13 +183,19 @@ class InfoPlanner:
             cands.append(rem[None])
         routes = np.concatenate(cands)
 
-        h_u = self._intensity_entropy(lam) if lam.sum() > 1e-9 else 0.0
-        score = self._score(routes, lam, track_data, ev, hsteps, h_u)
+        score = self._score(routes, self._cell_value(lam), track_data, ev, hsteps)
         if prev is not None:
             score[prev] *= 1.03   # mild hysteresis: do not churn between near-equal plans
         return routes[int(np.argmax(score))]
 
-    def _score(self, routes, lam, track_data, ev, hsteps, h_u):
+    def _cell_value(self, lam):
+        """Per-cell value of looking: uncertainty removed (entropy) or weighted expected detections."""
+        if self.objective == "detections":
+            h_u = self._intensity_entropy(lam) if lam.sum() > 1e-9 else 0.0
+            return h_u * lam * self.pd
+        return cell_entropy(lam) * self.pd
+
+    def _score(self, routes, cell_value, track_data, ev, hsteps):
         g = self.g
         C = len(routes)
         P = routes[:, ev, :2]
@@ -188,7 +207,7 @@ class InfoPlanner:
         seen = tmin[:, :g.N] < np.iinfo(np.int16).max
         G = np.where(seen, self.gamma ** tmin[:, :g.N].astype(np.float32), 0.0)
         with np.errstate(all="ignore"):   # spurious FP flags from some BLAS builds
-            search = G @ (lam * self.pd)
+            search = G @ cell_value
 
         track = np.zeros(C)
         for _, F, Hk, covered in track_data:
@@ -199,11 +218,11 @@ class InfoPlanner:
             track += np.where(anyhit, self.gamma ** hsteps[first] * Hk[first], 0.0).mean(1)
 
         outside = ~g.inside(routes[..., 0], routes[..., 1])
-        return self.w_search * h_u * search + self.w_track * track - 10.0 * outside.mean(1)
+        return self.w_search * search + self.w_track * track - 10.0 * outside.mean(1)
 
-    def _value_goals(self, lam, track_data):
+    def _value_goals(self, cell_value, track_data):
         g = self.g
-        V = self.w_search * self._intensity_entropy(lam) * lam if lam.sum() > 1e-9 else lam.copy()
+        V = self.w_search * cell_value
         for tr, F, Hk, covered in track_data:
             cells = g.index(F[:, -1, 0], F[:, -1, 1])
             np.add.at(V, cells, self.w_track * Hk[-1] * (~covered) / len(F))

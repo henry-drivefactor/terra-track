@@ -1,0 +1,15 @@
+name: swarm_size
+description: >
+  How does performance scale with swarm size, and how does the coordinated
+  uncertainty-reduction planner compare with lawnmower sweeps at each size?
+  1 to 10 agents on the valley scenario.
+scenario: scenarios/s1_valley_search.yaml
+seeds: [1, 2, 3, 4, 5, 6]
+overrides:
+  sim.duration_s: 1800
+grid:
+  x: {key: agents.count, label: "swarm size (agents)", values: [1, 2, 3, 4, 6, 8, 10]}
+  series:
+    coordinated: {planner.type: coordinated}
+    lawnmower: {planner.type: lawnmower}
+scaling_metrics: [belief_uncertainty_mean, loc_score_mean, found_final, track_err_m_mean]

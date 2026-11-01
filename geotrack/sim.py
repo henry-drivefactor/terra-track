@@ -10,7 +10,7 @@ import numpy as np
 
 from . import audit
 from .agent import Agent
-from .belief import SearchModel
+from .belief import SearchModel, cell_entropy
 from .comms import Network
 from .planner import InfoPlanner, LawnmowerPlanner
 from .targets import TargetSim
@@ -191,6 +191,10 @@ class Simulation:
             "expected_undiscovered": float(np.mean([a.search.expected_undiscovered for a in alive])) if alive else np.nan,
             "true_undiscovered": int((self.found_step < 0).sum()),
             "map_divergence": float(np.mean(div)) if div else 0.0,
+            "belief_uncertainty": float(np.mean([cell_entropy(a.search.lam).sum()
+                                                 + sum(self.search_model.track_uncertainty(t.cells)
+                                                       for t in a.tracks.tracks.values())
+                                                 for a in alive])) if alive else np.nan,
             "kbytes": self.net.bytes / 1000.0,
             "packets": self.net.packets,
             "replans": self.replans,
@@ -245,6 +249,8 @@ class Simulation:
             "staleness_s_mean": float(np.mean(m["staleness_s"])),
             "coverage_final": float(m["coverage"][-1]),
             "map_divergence_mean": float(np.mean(m["map_divergence"])),
+            "belief_uncertainty_mean": float(np.mean(m["belief_uncertainty"])),
+            "belief_uncertainty_final": float(m["belief_uncertainty"][-1]),
             "kbytes_total": float(m["kbytes"][-1]),
             "kbytes_per_agent_min": float(m["kbytes"][-1] / self.cfg["agents"]["count"] / (m["t"][-1] / 60.0)),
             "packets_total": int(m["packets"][-1]),

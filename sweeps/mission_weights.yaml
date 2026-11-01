@@ -1,0 +1,16 @@
+name: mission_weights
+description: >
+  The search/track trade-off. Minimising total belief uncertainty favours
+  sweeping unsearched ground; keeping found vehicles pinned down needs more weight
+  on the track term. Scan w_track under the uncertainty objective, against the
+  detection-driven objective.
+scenario: scenarios/s1_valley_search.yaml
+seeds: [1, 2, 3, 4, 5, 6]
+overrides:
+  sim.duration_s: 1800
+variants:
+  "uncertainty, w_track 1": {planner.w_track: 1.0}
+  "uncertainty, w_track 4": {planner.w_track: 4.0}
+  "uncertainty, w_track 16": {planner.w_track: 16.0}
+  "detections objective": {planner.objective: detections}
+plots: [belief_uncertainty, loc_score, coverage, track_err_m]
